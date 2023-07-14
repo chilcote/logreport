@@ -1,0 +1,138 @@
+#!/usr/bin/python3
+
+import argparse, json, os, sys
+# keys: timestamp, category, eventMessage, processImagePath, senderImagePath, messageType, subsystem, processID
+
+def colorme(text, color=None):
+    if not os.getenv("ANSI_COLORS_DISABLED"):
+        fmt_str = "\033[%dm"
+        reset = "\033[0m"
+        colors = {
+            "red": 31,
+            "green": 32,
+            "yellow": 33,
+            "magenta": 35,
+            "cyan": 36,
+            "white": 37,
+        }
+        if color is not None:
+            text = fmt_str % (colors[color]) + text + reset
+    return text
+
+
+def group_items(data, category, errors=False):
+    l = []
+    for i in data:
+        if errors:
+            if i.get('messageType', '') != 'Error':
+                continue
+        l.append(i.get(category))
+
+    return l
+
+
+def list_items(l):
+    for i in set(l):
+        if i:
+            print(i)
+
+
+def list_errors(data):
+    l = []
+    for i in data:
+        if i.get('messageType', '') == 'Error':
+            print(i.get('eventMessage', ''))
+
+
+def print_detailed(data):
+    for i in data:
+        print(colorme("timestamp: {0}".format(i['timestamp']), "yellow"))
+        if i.get('messageType', '') == "Error":
+            color = "red"
+        else:
+            color = "cyan"
+        print(colorme("messageType: {0}".format(i.get('messageType', '')), color))
+        print("processID: {0}".format(i['processID']))
+        print("processImagePath: {0}".format(i['processImagePath']))
+        print("senderImagePath: {0}".format(i['senderImagePath']))
+        print("subsystem: {0}".format(i['subsystem']))
+        print("category: {0}".format(i['category']))
+        print("eventMessage: {0}".format(i['eventMessage']))
+        print("----")
+
+
+def order_messages(data):
+    freq = {}
+    l = group_items(data, 'eventMessage')
+    
+    for i in l:
+        freq[i] = l.count(i)
+    
+    for k, v in sorted(freq.items(), key=lambda x: x[1], reverse=False):
+        print("{0} found: {1}".format(v, k))
+
+    
+def main():
+    """Interactive mode"""
+    parser = argparse.ArgumentParser(
+        description="Returns info from unified logs"
+    )
+    parser.add_argument("--list-subsystems", action="store_true", help="list subsystems")
+    parser.add_argument("--list-categories", action="store_true", help="list categories")
+    parser.add_argument("--list-processimagepaths", action="store_true", help="list processImagePaths")
+    parser.add_argument("--list-senderimagepaths", action="store_true", help="list senderImagePaths")
+    parser.add_argument("--list-messagetypes", action="store_true", help="list messageTypes")
+    parser.add_argument("--list-eventmessages", action="store_true", help="list eventMessages")  
+    parser.add_argument("--list-errors", action="store_true", help="list errors")    
+    parser.add_argument("--ordered-messages", action="store_true", help="order eventMessages")
+    parser.add_argument("--detailed", action="store_true", help="show detailed log info")
+    parser.add_argument("--report", action="store_true", help="show report of log info")
+    args = parser.parse_args()
+
+    data = json.load(sys.stdin)
+
+    if args.list_subsystems:
+        list_items(group_items(data, 'subsystem'))
+
+    if args.list_categories:
+        list_items(group_items(data, 'category'))
+
+    if args.list_processimagepaths:
+        list_items(group_items(data, 'processImagePath'))
+
+    if args.list_senderimagepaths:
+        list_items(group_items(data, 'senderImagePath'))
+
+    if args.list_messagetypes:
+        list_items(group_items(data, 'messageType'))
+
+    if args.list_eventmessages:
+        list_items(group_items(data, 'eventMessage'))
+
+    if args.list_errors:
+        list_items(group_items(data, 'eventMessage', errors=True))
+
+    if args.ordered_messages:
+        order_messages(data)
+
+    if args.detailed:
+        print_detailed(data)
+
+    if args.report:
+        order_messages(data)
+        print("\n----\nprocessImagePath\n")
+        list_items(group_items(data, 'processImagePath'))
+        print("\n----\nsenderImagePath\n")
+        list_items(group_items(data, 'senderImagePath'))
+        print("\n----\nsubsystem\n")
+        list_items(group_items(data, 'subsystem'))
+        print("\n----\ncategory\n")
+        list_items(group_items(data, 'category'))
+        print("\n----\nmessageType\n")
+        list_items(group_items(data, 'messageType'))
+        print("\n----")
+        print(str(len(data)) + " log lines found")
+
+
+if __name__ == "__main__":
+    sys.exit(main())
